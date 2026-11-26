@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Landelijke nieuwbouwzoeker</title>
+<style>
+:root{font-family:Arial,sans-serif;color:#1f2937;background:#f3f6fa}*{box-sizing:border-box}body{margin:0;padding:24px}main{max-width:1050px;margin:auto}
+header{background:#173b63;color:white;padding:26px;border-radius:16px;margin-bottom:20px}h1{margin:0 0 8px;font-size:27px}header p{margin:0;color:#dce8f5}
+.panel{background:white;border:1px solid #dce3ec;border-radius:14px;padding:20px;margin-bottom:16px;box-shadow:0 3px 12px #172b4d0a}
+.row{display:flex;gap:10px;flex-wrap:wrap}label{display:block;font-weight:700;margin-bottom:7px}
+input{flex:1;min-width:220px;padding:13px;border:1px solid #bdc8d6;border-radius:9px;font-size:16px}
+button{border:0;border-radius:9px;padding:13px 19px;background:#1769aa;color:white;font-weight:700;font-size:15px;cursor:pointer}button:disabled{opacity:.6;cursor:wait}
+.note{color:#657386;font-size:13px;line-height:1.5}.results{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.item{border:1px solid #dce3ec;border-radius:12px;padding:16px;background:#fff}.item h3{margin:0 0 8px;color:#173b63;font-size:17px}.item p{font-size:14px;line-height:1.45;margin:6px 0}
+.item a{color:#1769aa;font-weight:700;text-decoration:none}.facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}
+.facts div{background:#f4f7fb;border-radius:8px;padding:9px;min-width:0}
+.facts span{display:block;color:#657386;font-size:11px;margin-bottom:4px}
+.facts strong{display:block;color:#173b63;font-size:14px;overflow-wrap:anywhere}
+.tag{display:inline-block;background:#e9f2fb;color:#174b78;border-radius:20px;padding:4px 9px;font-size:12px;margin:2px 4px 7px 0}
+.empty{padding:18px;background:#f7f9fc;border-radius:10px;color:#68778a}#status{margin-top:14px;color:#34465b}
+.setup{background:#fff8e8;border:1px solid #f0d89c;padding:12px;border-radius:9px;font-size:13px;line-height:1.5}
+@media(max-width:560px){body{padding:12px}header{padding:20px}.row button{width:100%}}
+</style></head>
+<body><main>
+<header><h1>Landelijke nieuwbouwzoeker</h1><p>Zoek per Nederlandse plaats naar nieuwe hoogbouwprojecten en projectgegevens.</p></header>
+<section class="panel">
+<label for="place">Plaats of gemeente</label><div class="row">
+<input id="place" value="Gouda" placeholder="Bijvoorbeeld Gouda, Utrecht of Rotterdam">
+<button id="searchBtn" onclick="searchPlace()">Zoek nieuwbouw</button></div>
+<div id="setup" class="setup" style="margin-top:12px">
+<strong>Eenmalig instellen:</strong> plaats straks de URL van je gepubliceerde Google Apps Script-webapp in de code bij <code>GAS_URL</code>. De zoekfunctie gebruikt die tussenserver om CORS-problemen te voorkomen.
+</div>
+<div id="status" role="status">Vul een plaats in en klik op ‘Zoek nieuwbouw’.</div>
+</section>
+<section class="panel"><h2>Gevonden hoogbouwprojecten</h2><div id="results" class="results"><div class="empty">Nog geen zoekopdracht uitgevoerd.</div></div></section>
+<footer class="note">De zoekfunctie doorzoekt officiële publicaties, lokale vergunningen en lokale bekendmakingen. Dit zijn officiële openbare meldingen; het zijn niet automatisch complete projectdossiers. Projectnamen, bouwer en technische tekeningen staan niet altijd in de publicatie.</footer>
+</main>
+<script>
+const GAS_URL = "https://script.google.com/macros/s/AKfycbxvCwiqK8UWj3Iij14LC0izRfm_QWif7mQTMVNqH7jskv5KT6qgxLKmKzjSBB1Kug7I/exec";
+let jsonpTimer=null;
+function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function showResults(data){
+ const target=document.getElementById("results");
+ if(!data || !data.ok){
+   target.innerHTML=`<div class="empty">${esc(data?.error||"Er ging iets mis bij het ophalen van de publicaties.")}</div>`;
+   document.getElementById("status").textContent="Zoeken niet gelukt.";return;
+ }
+ if(!data.results || !data.results.length){
+   target.innerHTML=`<div class="empty">Geen relevante officiële bouwpublicaties gevonden voor <strong>${esc(data.place)}</strong>. ${esc(data.warning||"Probeer een andere schrijfwijze of zoek later opnieuw.")}</div>`;
+ }else{
+   target.innerHTML=data.results.map(r=>`<article class="item">
+     <span class="tag">${esc(r.source||"Officiële bron")}</span>
+     <h3>${esc(r.title)}</h3>
+     ${r.date?`<p><strong>Datum:</strong> ${esc(r.date)}</p>`:""}
+     ${r.publisher?`<p><strong>Publicerende organisatie:</strong> ${esc(r.publisher)}</p>`:""}
+     <div class="facts">
+       <div><span>Verdiepingen</span><strong>${r.floors != null ? esc(r.floors) : "Niet gevonden"}</strong></div>
+       <div><span>Woningen</span><strong>${r.homes != null ? esc(r.homes) : "Niet gevonden"}</strong></div>
+       <div><span>Hoogte</span><strong>${r.heightMeters != null ? esc(r.heightMeters) + " m" : "Niet gevonden"}</strong></div>
+       <div><span>Bouwstart</span><strong>${r.plannedStartDate ? esc(r.plannedStartDate) : "Niet gevonden"}</strong></div>
+       <div><span>Bouwadres</span><strong>${r.address ? esc(r.address) : "Niet gevonden"}</strong></div>
+       <div><span>Status</span><strong>${r.constructionStatus ? esc(r.constructionStatus) : "Niet gevonden"}</strong></div>
+     </div>
+     ${r.description?`<p>${esc(r.description).slice(0,650)}</p>`:""}
+     <p><a href="${esc(r.url)}" target="_blank" rel="noopener">Bekijk projectbron ↗</a></p>
+   </article>`).join("");
+ }
+ document.getElementById("status").textContent=`Zoeken afgerond voor ${data.place}: ${data.count} projecten gevonden.`;
+}
+function handleSearch(data){clearTimeout(jsonpTimer);document.getElementById("searchBtn").disabled=false;showResults(data);}
+function searchPlace(){
+ const place=document.getElementById("place").value.trim();
+ if(!place){document.getElementById("status").textContent="Vul eerst een plaats in.";return;}
+ if(GAS_URL.indexOf("https://script.google.com/macros/s/")!==0){
+   document.getElementById("status").textContent="De Google Apps Script-koppeling is nog niet ingesteld.";
+   document.getElementById("results").innerHTML='<div class="empty">Eerst Code.gs publiceren als Google Apps Script-webapp en de URL in GAS_URL zetten. Zie de installatie-instructies.</div>';
+   return;
+ }
+ document.getElementById("searchBtn").disabled=true;
+ document.getElementById("status").textContent=`Officiële publicaties voor ${place} ophalen…`;
+ document.getElementById("results").innerHTML='<div class="empty">Bezig met zoeken in de landelijke overheidsbronnen…</div>';
+ const old=document.getElementById("jsonpScript");if(old)old.remove();
+ const script=document.createElement("script");script.id="jsonpScript";
+ script.src=GAS_URL+"?place="+encodeURIComponent(place)+"&callback=handleSearch&_="+Date.now();
+ script.onerror=()=>{clearTimeout(jsonpTimer);document.getElementById("searchBtn").disabled=false;document.getElementById("status").textContent="De zoekserver kon niet worden bereikt. Controleer of de Apps Script-webapp openbaar is gepubliceerd.";};
+ document.body.appendChild(script);
+ jsonpTimer=setTimeout(()=>{document.getElementById("searchBtn").disabled=false;document.getElementById("status").textContent="De zoekopdracht duurt te lang. Probeer het opnieuw.";},60000);
+}
+document.getElementById("place").addEventListener("keydown",e=>{if(e.key==="Enter")searchPlace();});
+</script></body></html>
